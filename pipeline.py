@@ -7,9 +7,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from skimage.restoration import denoise_nl_means, estimate_sigma
 from visualize import show_images
+import bm3d
 
-
-img = Image.open('/Users/peterbrezovcsik/Documents/Kaggle/SkinCancerDetection/data/train-image/image/ISIC_0082829.jpg')
 
 class ProcessDataset:
     def __init__(self, data_path, label_path):
@@ -67,16 +66,20 @@ class Denoise(nn.Module):
     def forward(self, x):
         est_sigma = np.mean(estimate_sigma(x, channel_axis=-1))
         x = denoise_nl_means(x, h = self.h_weight * est_sigma, sigma = est_sigma, **self.patch_kw)
+        x = bm3d.bm3d(x, sigma_psd = 0.002, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
 
         return torch.tensor(x)
 
-
+def imshow(img):
+        plt.imshow(img, cmap='gray', vmin=0, vmax=255)
+        plt.show()
 
 def main():
+
     
     ds = ProcessDataset(data_path='/Users/peterbrezovcsik/Documents/Kaggle/SkinCancerDetection/data/train-image/image',
                         label_path='/Users/peterbrezovcsik/Documents/Kaggle/SkinCancerDetection/data/train-metadata.csv')
-
+    
 
 main()
 
