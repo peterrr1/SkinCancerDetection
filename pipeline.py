@@ -7,7 +7,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 from skimage.restoration import denoise_nl_means, estimate_sigma
 from visualize import show_images
-import bm3d
+from skimage import exposure, filters
+from skimage import img_as_float
+from skimage import segmentation
+
+
 
 
 class ProcessDataset:
@@ -16,16 +20,22 @@ class ProcessDataset:
         self.label_path = label_path
 
         self.transform = v2.Compose([
-            v2.Grayscale(num_output_channels=3),
+            v2.Resize(size=(224, 224), antialias=True),
+            v2.RandomRotation(30),
+            v2.RandomHorizontalFlip(p=0.3),
+            v2.Grayscale(num_output_channels=1),
             v2.PILToTensor(),
-            v2.ConvertImageDtype(torch.float32) ,
-            Denoise(h_weight=0.8),
-            v2.Normalize(mean=[0.485,], std=[0.229,]),
+            ScaleAndConvert(),
+            HistogramEqualization(),
+            v2.Normalize((0.485,), (0.229,)),
         ])
 
         self.samples = self._create_dataset()
 
-    
+
+    def __len__(self):
+        return len(self.samples)
+
 
     def _create_dataset(self):
         np.random.seed(0)
@@ -53,8 +63,9 @@ class ProcessDataset:
 
 
 
+
 class Denoise(nn.Module):
-    def __init__(self, h_weight: float = 0.8, patch_size: int = 5,
+    def __init__(self, h_weight: float = 100, patch_size: int = 5,
                  patch_distance: int = 6, fast_mode: bool = False):
         super(Denoise, self).__init__()
 
@@ -66,23 +77,32 @@ class Denoise(nn.Module):
     def forward(self, x):
         est_sigma = np.mean(estimate_sigma(x, channel_axis=-1))
         x = denoise_nl_means(x, h = self.h_weight * est_sigma, sigma = est_sigma, **self.patch_kw)
-        x = bm3d.bm3d(x, sigma_psd = 0.002, stage_arg = bm3d.BM3DStages.HARD_THRESHOLDING)
 
         return torch.tensor(x)
 
-def imshow(img):
-        plt.imshow(img, cmap='gray', vmin=0, vmax=255)
-        plt.show()
 
-def main():
 
+
+class ScaleAndConvert(nn.Module):
+    def __init__(self):
+        super(ScaleAndConvert, self).__init__()
     
-    ds = ProcessDataset(data_path='/Users/peterbrezovcsik/Documents/Kaggle/SkinCancerDetection/data/train-image/image',
-                        label_path='/Users/peterbrezovcsik/Documents/Kaggle/SkinCancerDetection/data/train-metadata.csv')
+    def forward(self, x):
+        x = np.array(x.squeeze())
+        x = img_as_float(x)
+        
+        return x
     
 
-main()
 
+
+class HistogramEqualization(nn.Module):
+    def __init__(self):
+        super(HistogramEqualization, self).__init__()
+    
+    def forward(self, x):
+        x = exposure.equalize_hist(x)
+        return torch.tensor(x).unsqueeze(0)
 
 
 
